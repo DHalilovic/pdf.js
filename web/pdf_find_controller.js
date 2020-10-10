@@ -485,6 +485,66 @@ class PDFFindController {
     );
   }
 
+  _rrCalculateWatchlistMatch(query, pageIndex, pageContent) {
+    // Matches found on page
+    const matchesWithLength = [];
+
+    for (let i = 0, len = query.length; i < len; i++) {
+      // Get current watchlist entry
+      const watchlistEntry = query[i];
+      // Get word to query
+      const subquery = watchlistEntry.entry;
+
+      // Get length of word
+      const subqueryLen = subquery.length;
+
+      // If entry is empty string...
+      if (subqueryLen === 0) {
+        // Ignore and skip this entry
+        continue;
+      }
+
+      // First offset word length to begin searching at index 0 
+      let matchIdx = -subqueryLen;
+
+      // Search for all instances of entry in page
+      while (true) {
+        // Find index of entry
+        matchIdx = pageContent.indexOf(subquery, matchIdx + subqueryLen);
+
+        // If entry not found...
+        if (matchIdx === -1) {
+          break;
+        }
+
+        // Store match along with length, original entry phrase,
+        // and desired highlight color.
+        matchesWithLength.push({
+          match: matchIdx,
+          matchLength: subqueryLen,
+          skipped: false,
+          entry: subquery,
+          color: watchlistEntry.color
+        });
+      }
+    }
+
+    // Prepare arrays for storing the matches.
+    // Clear past matches.
+    this._pageMatchesLength[pageIndex] = [];
+    this._pageMatchesColor[pageIndex] = [];
+    this._pageMatches[pageIndex] = [];
+
+    // Sort `matchesWithLength`, remove intersecting terms and put the result
+    // into the two arrays.
+    this._prepareMatches(
+      matchesWithLength,
+      this._pageMatches[pageIndex],
+      this._pageMatchesColor[pageIndex],
+      this._pageMatchesLength[pageIndex]
+    );
+  }
+
   _calculateMatch(pageIndex) {
     let pageContent = this._pageContents[pageIndex];
     let query = this._query;
