@@ -186,6 +186,46 @@ class PDFFindController {
     });
   }
 
+  rrExecuteCommand(cmd, state) {
+    if (!state) {
+      return;
+    }
+
+    // Get current document
+    const pdfDocument = this._pdfDocument;
+
+    // Should we refresh/update all pages and their findings?
+    this.dirtyMatch = this._state === null || this._shouldDirtyMatch(cmd, state)
+
+    // Set current state
+    this._state = state;
+
+    this._firstPageCapability.promise.then(() => {
+      // If the document was closed before searching began, or if the search
+      // operation was relevant for a previously opened document, do nothing.
+      if (
+        !this._pdfDocument ||
+        (pdfDocument && this._pdfDocument !== pdfDocument)
+      ) {
+        return;
+      }
+
+      // Get text from all pages
+      this._extractText();
+
+      if (cmd === "find") {
+        // Find matches
+        this._rrNextMatch();
+      } else if (cmd === "findagain") {
+        // Find matches
+        this._rrNextMatch();
+
+        // Highlight matches on all active pages
+        this._updateAllPages();
+      }
+    });
+  }
+
   scrollMatchIntoView({ element = null, pageIndex = -1, matchIndex = -1 }) {
     if (!this._scrollMatches || !element) {
       return;
