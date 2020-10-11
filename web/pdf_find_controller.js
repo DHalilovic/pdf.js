@@ -580,8 +580,8 @@ class PDFFindController {
     this._prepareMatches(
       matchesWithLength,
       this._pageMatches[pageIndex],
-      this._pageMatchesColor[pageIndex],
-      this._pageMatchesLength[pageIndex]
+      this._pageMatchesLength[pageIndex],
+      this._pageMatchesColor[pageIndex]
     );
   }
 
