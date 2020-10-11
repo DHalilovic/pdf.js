@@ -109,7 +109,7 @@ class TextLayerBuilder {
       () => {
         this.textLayerDiv.appendChild(textLayerFrag);
         this._finishRendering();
-        this._updateMatches();
+        this._rrUpdateMatches();
       },
       function (reason) {
         // Cancelled or failed to render text layer; skipping errors.
@@ -119,7 +119,7 @@ class TextLayerBuilder {
     if (!this._onUpdateTextLayerMatches) {
       this._onUpdateTextLayerMatches = evt => {
         if (evt.pageIndex === this.pageIdx || evt.pageIndex === -1) {
-          this._updateMatches();
+          this._rrUpdateMatches();
         }
       };
       this.eventBus._on(
@@ -193,6 +193,66 @@ class TextLayerBuilder {
           divIdx: i,
           offset: matchIdx - iIndex,
         },
+      };
+
+      // Calculate the end position.
+      if (matchesLength) {
+        // Multiterm search.
+        matchIdx += matchesLength[m];
+      } else {
+        // Phrase search.
+        matchIdx += queryLen;
+      }
+
+      // Somewhat the same array as above, but use > instead of >= to get
+      // the end position right.
+      while (i !== end && matchIdx > iIndex + textContentItemsStr[i].length) {
+        iIndex += textContentItemsStr[i].length;
+        i++;
+      }
+
+      match.end = {
+        divIdx: i,
+        offset: matchIdx - iIndex,
+      };
+      result.push(match);
+    }
+    return result;
+  }
+
+  _rrConvertMatches(matches, matchesColor, matchesLength) {
+    // Early exit if there is nothing to convert.
+    if (!matches) {
+      return [];
+    }
+    const { findController, textContentItemsStr } = this;
+
+    let i = 0,
+      iIndex = 0;
+    const end = textContentItemsStr.length - 1;
+    const queryLen = findController.state.query.length;
+    const result = [];
+
+    for (let m = 0, mm = matches.length; m < mm; m++) {
+      // Calculate the start position.
+      let matchIdx = matches[m];
+
+      // Loop over the divIdxs.
+      while (i !== end && matchIdx >= iIndex + textContentItemsStr[i].length) {
+        iIndex += textContentItemsStr[i].length;
+        i++;
+      }
+
+      if (i === textContentItemsStr.length) {
+        console.error("Could not find a matching mapping");
+      }
+
+      const match = {
+        begin: {
+          divIdx: i,
+          offset: matchIdx - iIndex,
+        },
+        color: matchesColor[m] // Store color for highlighting
       };
 
       // Calculate the end position.
@@ -325,6 +385,129 @@ class TextLayerBuilder {
     }
   }
 
+  _rrRenderMatches(matches) {
+    // Early exit if there is nothing to render.
+    if (matches.length === 0) {
+      return;
+    }
+    const { findController, pageIdx, textContentItemsStr, textDivs } = this;
+
+    const isSelectedPage = pageIdx === findController.selected.pageIdx;
+    const selectedMatchIdx = findController.selected.matchIdx;
+    const highlightAll = true; // Always highlight
+    let prevEnd = null;
+    const infinity = {
+      divIdx: -1,
+      offset: undefined,
+    };
+
+    function beginText(begin, className, styleOverride, styleVal) {
+      const divIdx = begin.divIdx;
+      textDivs[divIdx].textContent = "";
+      appendTextToDiv(divIdx, 0, begin.offset, className, styleOverride, styleVal);
+    }
+
+    function appendTextToDiv(divIdx, fromOffset, toOffset, className, styleOverride, styleVal) {
+      const div = textDivs[divIdx];
+      const content = textContentItemsStr[divIdx].substring(
+        fromOffset,
+        toOffset
+      );
+      const node = document.createTextNode(content);
+      if (className || styleOverride) {
+        const span = document.createElement("span");
+        
+        if (className) {
+          span.className = className;
+        }
+
+        // If style attribute provided...
+        if (styleOverride) {
+          // Assign new value to given attribute
+          span.style[styleOverride] = styleVal;
+        }
+
+        span.appendChild(node);
+        div.appendChild(span);
+        return;
+      }
+      div.appendChild(node);
+    }
+
+    let i0 = selectedMatchIdx,
+      i1 = i0 + 1;
+    if (highlightAll) {
+      i0 = 0;
+      i1 = matches.length;
+    } else if (!isSelectedPage) {
+      // Not highlighting all and this isn't the selected page, so do nothing.
+      return;
+    }
+
+    for (let i = i0; i < i1; i++) {
+      const match = matches[i];
+      const begin = match.begin;
+      const end = match.end;
+      const isSelected = isSelectedPage && i === selectedMatchIdx;
+      const highlightSuffix = isSelected ? " selected" : "";
+
+      // Don't automatically scroll match into view
+      /*
+      if (isSelected) {
+        // Attempt to scroll the selected match into view.
+        findController.scrollMatchIntoView({
+          element: textDivs[begin.divIdx],
+          pageIndex: pageIdx,
+          matchIndex: selectedMatchIdx,
+        });
+      }
+      */
+
+      // Match inside new div.
+      if (!prevEnd || begin.divIdx !== prevEnd.divIdx) {
+        // If there was a previous div, then add the text at the end.
+        if (prevEnd !== null) {
+          // Apply formatting until end of current div
+          appendTextToDiv(prevEnd.divIdx, prevEnd.offset, infinity.offset);
+        }
+        // Clear the divs and set the content until the starting point.
+        beginText(begin);
+      } else {
+        // Apply formatting until end of current div
+        appendTextToDiv(prevEnd.divIdx, prevEnd.offset, begin.offset);
+      }
+
+      if (begin.divIdx === end.divIdx) {
+        appendTextToDiv(
+          begin.divIdx,
+          begin.offset,
+          end.offset,
+          "highlight" + highlightSuffix,
+          "backgroundColor", // Override background/highlight color
+          match.color // Match's specific highlight color
+        );
+      } else {
+        appendTextToDiv(
+          begin.divIdx,
+          begin.offset,
+          infinity.offset,
+          "highlight begin" + highlightSuffix,
+          "backgroundColor", // Override background/highlight color
+          match.color // Match's specific highlight color
+        );
+        for (let n0 = begin.divIdx + 1, n1 = end.divIdx; n0 < n1; n0++) {
+          textDivs[n0].className = "highlight middle" + highlightSuffix;
+        }
+        beginText(end, "highlight end" + highlightSuffix, "backgroundColor", match.color);
+      }
+      prevEnd = end;
+    }
+
+    if (prevEnd) {
+      appendTextToDiv(prevEnd.divIdx, prevEnd.offset, infinity.offset);
+    }
+  }
+
   _updateMatches() {
     // Only show matches when all rendering is done.
     if (!this.renderingDone) {
@@ -366,6 +549,45 @@ class TextLayerBuilder {
       pageMatchesColor
     ); // #201
     this._renderMatches(this.matches);
+  }
+
+  _rrUpdateMatches() {
+    // Only show matches when all rendering is done.
+    if (!this.renderingDone) {
+      return;
+    }
+    const {
+      findController,
+      matches,
+      pageIdx,
+      textContentItemsStr,
+      textDivs,
+    } = this;
+    let clearedUntilDivIdx = -1;
+
+    // Clear all current matches.
+    for (let i = 0, ii = matches.length; i < ii; i++) {
+      const match = matches[i];
+      const begin = Math.max(clearedUntilDivIdx, match.begin.divIdx);
+      for (let n = begin, end = match.end.divIdx; n <= end; n++) {
+        const div = textDivs[n];
+        div.textContent = textContentItemsStr[n];
+        div.className = "";
+      }
+      clearedUntilDivIdx = match.end.divIdx + 1;
+    }
+
+    if (!findController || !findController.highlightMatches) {
+      return;
+    }
+    // Convert the matches on the `findController` into the match format
+    // used for the textLayer.
+    const pageMatches = findController.pageMatches[pageIdx] || null;
+    const pageMatchesColor = findController.pageMatchesColor[pageIdx] || null;
+    const pageMatchesLength = findController.pageMatchesLength[pageIdx] || null;
+
+    this.matches = this._rrConvertMatches(pageMatches, pageMatchesColor, pageMatchesLength);
+    this._rrRenderMatches(this.matches);
   }
 
   /**
