@@ -648,6 +648,47 @@ class PDFFindController {
     }
   }
 
+  _rrCalculateMatch(pageIndex) {
+    // Get page text, watchlist query array
+    let pageContent = this._pageContents[pageIndex];
+    let query = this._state.query;
+
+    // If no valid query provided...
+    if (!query || query.length < 1) {
+      // Do nothing: the matches should be wiped out already.
+      return;
+    }
+
+    // Treat as non-case-sensitive by default
+    pageContent = pageContent.toLowerCase();
+
+    this._rrCalculateWatchlistMatch(query, pageIndex, pageContent)
+
+    // Highlight matches on previously rendered, active pages
+    this._updatePage(pageIndex)
+
+    // If current page was on eon which to resume...
+    if (this._resumePageIdx === pageIndex) {
+      // Clear resume page, as we have completed it
+      this._resumePageIdx = null;
+
+      // Proceed to next page
+      this._nextPageMatch();
+    }
+
+    // Update the match count.
+    const pageMatchesCount = this._pageMatches[pageIndex].length;
+
+    // If any matches on this page...
+    if (pageMatchesCount > 0) {
+      // Add to total matches
+      this._matchesCountTotal += pageMatchesCount;
+
+      // Update total matches as shown on viewer
+      this._updateUIResultsCount();
+    }
+  }
+
   _extractText() {
     // Perform text extraction once if this method is called multiple times.
     if (this._extractTextPromises.length > 0) {
