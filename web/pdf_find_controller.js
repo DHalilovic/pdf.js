@@ -785,6 +785,101 @@ class PDFFindController {
     this._nextPageMatch();
   }
 
+  _rrDirtyReset() {
+    // Reset everything for match recalculation
+    this._dirtyMatch = false;
+    this._selected.pageIdx = this._selected.matchIdx = -1;
+    this._offset.pageIdx = currentPageIndex;
+    this._offset.matchIdx = null;
+    this._offset.wrapped = false;
+    this._resumePageIdx = null;
+    this._pageMatches.length = 0;
+    this._pageMatchesColor.length = 0;
+    this._pageMatchesLength.length = 0;
+    this._matchesCountTotal = 0;
+  }
+
+  _rrNextMatch() {
+    const previous = this._state.findPrevious;
+    const currentPageIndex = this._linkService.page - 1;
+    const numPages = this._linkService.pagesCount;
+
+    this._highlightMatches = true;
+
+    // If we should re-calculate matches...
+    if (this._dirtyMatch) {
+      // Clear existing matches
+      this._rrDirtyReset();
+    }
+
+    this._updateAllPages(); // Wipe out any previously highlighted matches.
+
+    for (let i = 0; i < numPages; i++) {
+      // If we are currently find matches for this page...
+      if (this._pendingFindMatches[i] === true) {
+        // Allow ongoing calculation to continue
+        continue;
+      }
+
+      // Indicate we are currently finding matches for this page
+      this._pendingFindMatches[i] = true;
+      
+      // Extract text for current page
+      this._extractTextPromises[i].then(pageIdx => {
+        
+        delete this._pendingFindMatches[pageIdx];
+        
+        // Find matches on current page
+        this._rrCalculateMatch(pageIdx);
+      });
+    }
+
+    // If there's no query there's no point in searching.
+    if (!this._state.query) {
+      this._updateUIState(FindState.FOUND);
+      return;
+    }
+
+    // If we're waiting on a page, we return since we can't do anything else.
+    if (this._resumePageIdx) {
+      return;
+    }
+
+    // Get offset page
+    const offset = this._offset;
+
+    // Keep track of how many pages we should maximally iterate through. 
+    this._pagesToSearch = numPages;
+
+    // If there's already a `matchIdx` that means we are iterating through a
+    // page's matches.
+    if (offset.matchIdx !== null) {
+
+      const numPageMatches = this._pageMatches[offset.pageIdx].length;
+
+      if (
+        (!previous && offset.matchIdx + 1 < numPageMatches) ||
+        (previous && offset.matchIdx > 0)
+      ) {
+        // The simple case; we just have advance the matchIdx to select
+        // the next match on the page.
+        offset.matchIdx = previous ? offset.matchIdx - 1 : offset.matchIdx + 1;
+        
+        // Update text layer
+        this._updateMatch(/* found = */ true);
+
+        return;
+      }
+
+      // We went beyond the current page's matches, so we advance to
+      // the next page.
+      this._advanceOffsetPage(previous);
+    }
+
+    // Start searching through the page.
+    this._nextPageMatch();
+  }
+
   _matchesReady(matches) {
     const offset = this._offset;
     const numMatches = matches.length;
