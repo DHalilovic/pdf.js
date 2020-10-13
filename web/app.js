@@ -2363,8 +2363,11 @@ function webViewerDocumentProperties() {
 }
 
 function webViewerFind(evt) {
+  
+  console.log(evt);
+
   PDFViewerApplication.findController.rrExecuteCommand("find" + evt.type, {
-    query: [
+    /* query: [
       {
         entry: evt.query,
         color: `#` + Math.floor(Math.random()*16777215).toString(16)
@@ -2373,7 +2376,8 @@ function webViewerFind(evt) {
         entry: "blue",
         color: `#` + Math.floor(Math.random()*16777215).toString(16)
       }
-    ],
+    ], */
+    query: evt.query,
     phraseSearch: evt.phraseSearch,
     caseSensitive: evt.caseSensitive,
     entireWord: evt.entireWord,
