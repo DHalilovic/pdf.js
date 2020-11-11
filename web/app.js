@@ -1719,6 +1719,12 @@ const PDFViewerApplication = {
       eventBus._on("fileinputchange", webViewerFileInputChange);
       eventBus._on("openfile", webViewerOpenFile);
     }
+
+    /*
+    eventBus._on("updatewatchlistresults", (res) => {
+      console.log(res.results);
+    });
+    */
   },
 
   bindWindowEvents() {

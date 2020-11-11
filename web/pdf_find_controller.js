@@ -195,7 +195,7 @@ class PDFFindController {
     const pdfDocument = this._pdfDocument;
 
     // Should we refresh/update all pages and their findings?
-    this.dirtyMatch = this._state === null || this._shouldDirtyMatch(cmd, state)
+    this._dirtyMatch = this._state === null || this._shouldDirtyMatch(cmd, state)
 
     // Set current state
     this._state = state;
@@ -250,6 +250,7 @@ class PDFFindController {
     this._pageMatches = [];
     this._pageMatchesLength = [];
     this._pageMatchesColor = []; // #201
+    this._watchlistResults = new Map(); // #RR
     this._state = null;
     // Currently selected match.
     this._selected = {
@@ -378,6 +379,53 @@ class PDFFindController {
       matches.push(matchesWithLength[i].match);
       matchesLength.push(matchesWithLength[i].matchLength);
       matchesColor.push(matchesWithLength[i].color); // #201
+    }
+  }
+
+  _rrPrepareResults(pageIndex, matchesWithLength) {
+    /**
+     * 
+     * @param {Map} map 
+     * @param {Object} match
+     * @param {string} match.entry Term
+     * @param {string} match.match Index in text
+     */
+    function updateResult(map, match)
+    {
+      let wordResult = map.get(match.entry);
+
+      // If entry for match not found...
+      if (wordResult == null) {
+        wordResult = new Map();
+        // Add index to page
+        wordResult.set(pageIndex, [match.match]);
+        // Add to map
+        map.set(match.entry, wordResult);
+      } else {
+        // Get locations on page
+        const indices = wordResult.get(pageIndex);
+        // If page not found...
+        if (indices == null) {
+          // Add page entry with new index
+          wordResult.set(pageIndex, [match.match]);
+        } else {
+          // Add index to existing page
+          indices.push(match.match);
+        }
+      }
+    }
+
+    // Map<word: string, Map<page: number, indices: number[]>>
+    // Iterate through found matches
+    for (let i = 0, len = matchesWithLength.length; i < len; i++) {
+        // Get current match
+        let currentMatch = matchesWithLength[i];
+        // Ignore skipped matches
+        if (currentMatch.skipped) {
+          continue;  
+        }
+        // Store match
+        updateResult(this._watchlistResults, currentMatch);
     }
   }
 
@@ -583,6 +631,12 @@ class PDFFindController {
       this._pageMatchesLength[pageIndex],
       this._pageMatchesColor[pageIndex]
     );
+
+    // Update results for event-emitting
+    this._rrPrepareResults(
+      pageIndex,
+      matchesWithLength
+    );
   }
 
   _calculateMatch(pageIndex) {
@@ -662,10 +716,10 @@ class PDFFindController {
     // Treat as non-case-sensitive by default
     pageContent = pageContent.toLowerCase();
 
-    this._rrCalculateWatchlistMatch(query, pageIndex, pageContent)
+    this._rrCalculateWatchlistMatch(query, pageIndex, pageContent);
 
     // Highlight matches on previously rendered, active pages
-    this._updatePage(pageIndex)
+    this._updatePage(pageIndex);
 
     // If current page was on eon which to resume...
     if (this._resumePageIdx === pageIndex) {
@@ -686,6 +740,10 @@ class PDFFindController {
 
       // Update total matches as shown on viewer
       this._updateUIResultsCount();
+    }
+
+    if (pageIndex === this._linkService.pagesCount - 1) {
+      this._updateWatchlistResults();
     }
   }
 
@@ -826,20 +884,6 @@ class PDFFindController {
     this._nextPageMatch();
   }
 
-  _rrDirtyReset() {
-    // Reset everything for match recalculation
-    this._dirtyMatch = false;
-    this._selected.pageIdx = this._selected.matchIdx = -1;
-    this._offset.pageIdx = currentPageIndex;
-    this._offset.matchIdx = null;
-    this._offset.wrapped = false;
-    this._resumePageIdx = null;
-    this._pageMatches.length = 0;
-    this._pageMatchesColor.length = 0;
-    this._pageMatchesLength.length = 0;
-    this._matchesCountTotal = 0;
-  }
-
   _rrNextMatch() {
     const previous = this._state.findPrevious;
     const currentPageIndex = this._linkService.page - 1;
@@ -850,7 +894,18 @@ class PDFFindController {
     // If we should re-calculate matches...
     if (this._dirtyMatch) {
       // Clear existing matches
-      this._rrDirtyReset();
+      // Reset everything for match recalculation
+      this._dirtyMatch = false;
+      this._selected.pageIdx = this._selected.matchIdx = -1;
+      this._offset.pageIdx = currentPageIndex;
+      this._offset.matchIdx = null;
+      this._offset.wrapped = false;
+      this._resumePageIdx = null;
+      this._pageMatches.length = 0;
+      this._pageMatchesColor.length = 0;
+      this._pageMatchesLength.length = 0;
+      this._watchlistResults.clear();
+      this._matchesCountTotal = 0;
     }
 
     this._updateAllPages(); // Wipe out any previously highlighted matches.
@@ -1063,6 +1118,14 @@ class PDFFindController {
     this._eventBus.dispatch("updatefindmatchescount", {
       source: this,
       matchesCount: this._requestMatchesCount(),
+    });
+  }
+
+  _updateWatchlistResults() {
+    this._eventBus.dispatch("updatewatchlistresults", {
+      source: this,
+      numPages: this._linkService.pagesCount,
+      results: this._watchlistResults // #RR
     });
   }
 
