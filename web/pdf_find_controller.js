@@ -219,7 +219,11 @@ class PDFFindController {
       } else if (cmd === "findagain") {
         // Find matches
         this._rrNextMatch();
-
+        // Highlight matches on all active pages
+        this._updateAllPages();
+      } else if (cmd === "highlightOnly") {
+        // Prepare provided matches
+        this._rrPrepareExistingMatches();
         // Highlight matches on all active pages
         this._updateAllPages();
       }
@@ -426,6 +430,57 @@ class PDFFindController {
         }
         // Store match
         updateResult(this._watchlistResults, currentMatch);
+    }
+  }
+
+  _rrPrepareExistingMatches() {
+    // Get watchlist query array with indices
+    let query = this._state.query;
+
+    // If no valid query provided...
+    if (!query || query.length < 1) {
+      // Do nothing: the matches should be wiped out already.
+      return;
+    }
+
+    for (let i = 0, len = query.length; i < len; i++) {
+      // Get current watchlist entry
+      const watchlistEntry = query[i]; 
+      // Get word to query
+      const subquery = watchlistEntry.entry;
+      // Get length of word
+      const subqueryLen = subquery.length;
+
+      // If entry is empty string...
+      if (subqueryLen === 0) {
+        // Ignore and skip this entry
+        continue;
+      }
+
+      // Get map of pages to indices
+      // Map<page: number, indices: number[]>
+      const pageIndices = watchlistEntry.results;
+
+      // Iterate through pages for indices
+      for (let i = 0, keys = pageIndices.keys(), i1 = keys.length; i < i1; i++) {
+        // Get current page
+        const page = keys[i];
+        // Get indices by page
+        const indices = pageIndices[page];
+
+        // Clear past matches.
+        this._pageMatchesLength[page] = [];
+        this._pageMatchesColor[page] = [];
+        this._pageMatches[page] = [];
+
+        // Iterate through indices on page
+        for (let j = 0, j1 = indices.length; j < j1; j++) {
+          // Add to matches
+          this._pageMatches[page].push(indices[j]);
+          this._pageMatchesLength[page].push(subqueryLen);
+          this._pageMatchesColor[page].push(watchlistEntry.color); // #201
+        }
+      }
     }
   }
 
