@@ -221,7 +221,7 @@ class PDFFindController {
         this._rrNextMatch();
         // Highlight matches on all active pages
         this._updateAllPages();
-      } else if (cmd === "highlightOnly") {
+      } else if (cmd === "findhighlightonly") {
         // Prepare provided matches
         this._rrPrepareExistingMatches();
         // Highlight matches on all active pages
@@ -437,15 +437,22 @@ class PDFFindController {
     // Get watchlist query array with indices
     let query = this._state.query;
 
+    // Clear previous results
+    this._pageMatches.length = 0;
+    this._pageMatchesLength.length = 0;
+    this._pageMatchesColor.length = 0; // #201
+
+    this._updateAllPages(); // Wipe out any previously highlighted matches.
+
     // If no valid query provided...
     if (!query || query.length < 1) {
       // Do nothing: the matches should be wiped out already.
       return;
     }
 
-    for (let i = 0, len = query.length; i < len; i++) {
+    for (let k = 0, k1 = query.length; k < k1; k++) {
       // Get current watchlist entry
-      const watchlistEntry = query[i]; 
+      const watchlistEntry = query[k]; 
       // Get word to query
       const subquery = watchlistEntry.entry;
       // Get length of word
@@ -462,16 +469,14 @@ class PDFFindController {
       const pageIndices = watchlistEntry.results;
 
       // Iterate through pages for indices
-      for (let i = 0, keys = pageIndices.keys(), i1 = keys.length; i < i1; i++) {
-        // Get current page
-        const page = keys[i];
-        // Get indices by page
-        const indices = pageIndices[page];
-
-        // Clear past matches.
-        this._pageMatchesLength[page] = [];
-        this._pageMatchesColor[page] = [];
-        this._pageMatches[page] = [];
+      for (let [page, indices] of pageIndices) {
+        // If current page data undefined...
+        if (this._pageMatchesLength[page] == null) {
+          // Refresh
+          this._pageMatchesLength[page] = [];
+          this._pageMatchesColor[page] = [];
+          this._pageMatches[page] = [];
+        }
 
         // Iterate through indices on page
         for (let j = 0, j1 = indices.length; j < j1; j++) {
