@@ -633,7 +633,8 @@ class PDFFindController {
     );
   }
 
-  _rrCalculateWatchlistMatch(query, pageIndex, pageContent) {
+  _rrCalculateWatchlistMatch(query, pageIndex, pageContent,
+    pageContentLowercase) {
     // Matches found on page
     const matchesWithLength = [];
 
@@ -654,11 +655,24 @@ class PDFFindController {
 
       // First offset word length to begin searching at index 0 
       let matchIdx = -subqueryLen;
+      
+      // Store pageContent, either normal or lowercase
+      let text;
+
+      // If term search is case-sensitive...
+      if (watchlistEntry.caseSensitive) {
+        // Leave term, text as-is
+        text = pageContent;
+      } else {
+        // Convert term, matching text to lowercase
+        subquery = subquery.toLowerCase();
+        text = pageContentLowercase;
+      }
 
       // Search for all instances of entry in page
       while (true) {
         // Find index of entry
-        matchIdx = pageContent.indexOf(subquery, matchIdx + subqueryLen);
+        matchIdx = text.indexOf(subquery, matchIdx + subqueryLen);
 
         // If entry not found...
         if (matchIdx === -1) {
@@ -671,7 +685,7 @@ class PDFFindController {
           match: matchIdx,
           matchLength: subqueryLen,
           skipped: false,
-          entry: subquery,
+          entry: watchlistEntry.entry, // Maintain original case
           color: watchlistEntry.color
         });
       }
@@ -773,10 +787,15 @@ class PDFFindController {
       return;
     }
 
-    // Treat as non-case-sensitive by default
-    pageContent = pageContent.toLowerCase();
+    // TODO Don't treat extracted text as case-insensitive by default
+    /* Currently not converting subqueries to lowercase, so subqueries
+    with capital letters never match with lowercase text. */
+    let pageContentLowercase = pageContent.toLowerCase();
 
-    this._rrCalculateWatchlistMatch(query, pageIndex, pageContent);
+    // TODO Add _isEntireWord() support on subquery basis
+
+    this._rrCalculateWatchlistMatch(query, pageIndex, pageContent,
+      pageContentLowercase);
 
     // Highlight matches on previously rendered, active pages
     this._updatePage(pageIndex);
