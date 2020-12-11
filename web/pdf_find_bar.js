@@ -92,12 +92,12 @@ class PDFFindBar {
         type: "highlightonly",
         query: [
           {
-            entry: "hello",
+            term: "hello",
             color: `#` + Math.floor(Math.random()*16777215).toString(16),
             results: new Map([[0, [0]]])
           },
           {
-            entry: "o",
+            term: "o",
             color: `#` + Math.floor(Math.random()*16777215).toString(16),
             results: new Map([[0, [8]]])
           },
@@ -113,7 +113,7 @@ class PDFFindBar {
         query: {
           range: 10,
           watchlistEntry: {
-            entry: this.findField.value,
+            term: this.findField.value,
             results: new Map([[0, [0]]])
           }
         }
@@ -157,7 +157,7 @@ class PDFFindBar {
       type,
       query: [
         {
-          entry: this.findField.value,
+          term: this.findField.value,
           color: `#` + Math.floor(Math.random()*16777215).toString(16)
         }
       ],

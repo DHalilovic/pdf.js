@@ -458,7 +458,7 @@ class PDFFindController {
       // Get current watchlist entry
       const watchlistEntry = query[k]; 
       // Get word to query
-      const subquery = watchlistEntry.entry;
+      const subquery = watchlistEntry.term;
       // Get length of word
       const subqueryLen = subquery.length;
 
@@ -646,8 +646,7 @@ class PDFFindController {
       // Get current watchlist entry
       const watchlistEntry = query[i];
       // Get word to query
-      let subquery = watchlistEntry.entry;
-
+      let subquery = watchlistEntry.term;
       // Get length of word
       const subqueryLen = subquery.length;
 
@@ -689,7 +688,7 @@ class PDFFindController {
           match: matchIdx,
           matchLength: subqueryLen,
           skipped: false,
-          entry: watchlistEntry.entry, // Maintain original case
+          entry: watchlistEntry.term, // Maintain original case
           color: watchlistEntry.color
         });
       }
@@ -832,19 +831,19 @@ class PDFFindController {
     }
   }
 
-  _rrCalculateContexts(pageIndex, range, pageIndices, entryLen) {
+  _rrCalculateContexts(pageIndex, range, pageIndices, termLen) {
     // Get page text
     const pageContent = this._pageContents[pageIndex];
     // Array of match indices
     const indices = pageIndices.get(pageIndex);
 
     function getContextEntry(pageIndex, pageContent, range,
-      startIndex, entryLen) {
+      startIndex, termLen) {
       // Store page number, before/after contexts
       const res = { page: pageIndex };
 
       // Get index right after match
-      const endIndex = startIndex + entryLen;
+      const endIndex = startIndex + termLen;
 
       // Extract before context
       res.before = pageContent.substring(
@@ -861,7 +860,7 @@ class PDFFindController {
       // Prepare, add context entry to overall results
       this._contextResults.push(
         getContextEntry(pageIndex, pageContent, range,
-          indices[i], entryLen)
+          indices[i], termLen)
       );
     }
   }
@@ -1125,9 +1124,9 @@ class PDFFindController {
     // Get entry, indices per page from query
     const watchlistEntry = query.watchlistEntry;
     
-    const entry = watchlistEntry.entry;
+    const term = watchlistEntry.term;
     // Entry length for finding context after match
-    const entryLen = entry.length;
+    const termLen = term.length;
     // Get map of pages to indices
     // Map<page: number, indices: number[]>
     const pageIndices = watchlistEntry.results;
@@ -1148,12 +1147,12 @@ class PDFFindController {
         delete this._pendingFindMatches[pageIdx];
         
         // Find matches on current page
-        this._rrCalculateContexts(pageIdx, range, pageIndices, entryLen);
+        this._rrCalculateContexts(pageIdx, range, pageIndices, termLen);
 
         // If all pages searched...
         if (pageIdx === this._linkService.pagesCount - 1) {
           // Provide results
-          this._updateContextResults(entry);
+          this._updateContextResults(term);
         }
       });
     }
@@ -1354,10 +1353,10 @@ class PDFFindController {
     });
   }
 
-  _updateContextResults(entry) {
+  _updateContextResults(term) {
     this._eventBus.dispatch("updatecontextresults", {
       source: this,
-      word: entry,
+      term,
       results: this._contextResults // #RR
     });
   }

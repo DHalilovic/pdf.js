@@ -2383,11 +2383,11 @@ function webViewerFind(evt) {
   PDFViewerApplication.findController.rrExecuteCommand("find" + evt.type, {
     /* query: [
       {
-        entry: evt.query,
+        term: evt.query,
         color: `#` + Math.floor(Math.random()*16777215).toString(16)
       },
       {
-        entry: "blue",
+        term: "blue",
         color: `#` + Math.floor(Math.random()*16777215).toString(16)
       }
     ], */
