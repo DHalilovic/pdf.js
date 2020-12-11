@@ -56,6 +56,7 @@ class PDFFindBar {
     });
 
     this.findField.addEventListener("input", () => {
+      // Normal function
       this.dispatchEvent("");
     });
 
@@ -81,7 +82,43 @@ class PDFFindBar {
     });
 
     this.highlightAll.addEventListener("click", () => {
+      // Normal function
       this.dispatchEvent("highlightallchange");
+      
+      /*
+      // Highlight only test      
+      this.eventBus.dispatch("find", {
+        source: this,
+        type: "highlightonly",
+        query: [
+          {
+            entry: "hello",
+            color: `#` + Math.floor(Math.random()*16777215).toString(16),
+            results: new Map([[0, [0]]])
+          },
+          {
+            entry: "o",
+            color: `#` + Math.floor(Math.random()*16777215).toString(16),
+            results: new Map([[0, [8]]])
+          },
+        ],
+      });
+      */
+      
+      /*
+      // Find contexts
+      this.eventBus.dispatch("find", {
+        source: this,
+        type: "contexts",
+        query: {
+          range: 10,
+          watchlistEntry: {
+            entry: this.findField.value,
+            results: new Map([[0, [0]]])
+          }
+        }
+      });
+      */
     });
 
     this.caseSensitive.addEventListener("click", () => {
@@ -118,9 +155,17 @@ class PDFFindBar {
     this.eventBus.dispatch("find", {
       source: this,
       type,
+      query: [
+        {
+          entry: this.findField.value,
+          color: `#` + Math.floor(Math.random()*16777215).toString(16)
+        }
+      ],
+      /*
       query: this.findFieldMultiline.classList.contains("hidden")
         ? this.findField.value
         : this.findFieldMultiline.value, // #201
+      */
       phraseSearch: !this.multipleSearchTexts.checked, // #201
       caseSensitive: this.caseSensitive.checked,
       entireWord: this.entireWord.checked,
