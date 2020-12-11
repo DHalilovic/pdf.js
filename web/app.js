@@ -1721,8 +1721,16 @@ const PDFViewerApplication = {
     }
 
     /*
+    // Print watchlist search results
     eventBus._on("updatewatchlistresults", (res) => {
       console.log(res.results);
+    });
+    */
+
+    /*
+    // Print context search results
+    eventBus._on("updatecontextresults", (res) => {
+      console.log(res);
     });
     */
   },
