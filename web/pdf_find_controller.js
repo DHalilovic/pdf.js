@@ -226,6 +226,9 @@ class PDFFindController {
         this._rrPrepareExistingMatches();
         // Highlight matches on all active pages
         this._updateAllPages();
+      } else if (cmd === "findcontexts") {
+        // Find contexts
+        this._rrNextContextMatch();
       }
     });
   }
@@ -255,6 +258,7 @@ class PDFFindController {
     this._pageMatchesLength = [];
     this._pageMatchesColor = []; // #201
     this._watchlistResults = new Map(); // #RR
+    this._contextResults = []; // #RR
     this._state = null;
     // Currently selected match.
     this._selected = {
@@ -642,7 +646,7 @@ class PDFFindController {
       // Get current watchlist entry
       const watchlistEntry = query[i];
       // Get word to query
-      const subquery = watchlistEntry.entry;
+      let subquery = watchlistEntry.entry;
 
       // Get length of word
       const subqueryLen = subquery.length;
@@ -821,8 +825,44 @@ class PDFFindController {
       this._updateUIResultsCount();
     }
 
+    // If all pages searched...
     if (pageIndex === this._linkService.pagesCount - 1) {
+      // Provide results
       this._updateWatchlistResults();
+    }
+  }
+
+  _rrCalculateContexts(pageIndex, range, pageIndices, entryLen) {
+    // Get page text
+    const pageContent = this._pageContents[pageIndex];
+    // Array of match indices
+    const indices = pageIndices.get(pageIndex);
+
+    function getContextEntry(pageIndex, pageContent, range,
+      startIndex, entryLen) {
+      // Store page number, before/after contexts
+      const res = { page: pageIndex };
+
+      // Get index right after match
+      const endIndex = startIndex + entryLen;
+
+      // Extract before context
+      res.before = pageContent.substring(
+        startIndex - range, startIndex);
+      // Extract after context
+      res.after = pageContent.substring(
+        endIndex, endIndex + range);
+      
+      return res;
+    }
+
+    // Iterate through indices on page
+    for (let i = 0, i1 = indices.length; i < i1; i++) {
+      // Prepare, add context entry to overall results
+      this._contextResults.push(
+        getContextEntry(pageIndex, pageContent, range,
+          indices[i], entryLen)
+      );
     }
   }
 
@@ -963,6 +1003,22 @@ class PDFFindController {
     this._nextPageMatch();
   }
 
+  _rrDirtyReset(currentPageIndex) {
+    // Reset everything for match recalculation
+    this._dirtyMatch = false;
+    this._selected.pageIdx = this._selected.matchIdx = -1;
+    this._offset.pageIdx = currentPageIndex;
+    this._offset.matchIdx = null;
+    this._offset.wrapped = false;
+    this._resumePageIdx = null;
+    this._pageMatches.length = 0;
+    this._pageMatchesColor.length = 0;
+    this._pageMatchesLength.length = 0;
+    this._watchlistResults.clear(); // #RR
+    this._contextResults.length = 0; // #RR
+    this._matchesCountTotal = 0;
+  }
+
   _rrNextMatch() {
     const previous = this._state.findPrevious;
     const currentPageIndex = this._linkService.page - 1;
@@ -973,18 +1029,7 @@ class PDFFindController {
     // If we should re-calculate matches...
     if (this._dirtyMatch) {
       // Clear existing matches
-      // Reset everything for match recalculation
-      this._dirtyMatch = false;
-      this._selected.pageIdx = this._selected.matchIdx = -1;
-      this._offset.pageIdx = currentPageIndex;
-      this._offset.matchIdx = null;
-      this._offset.wrapped = false;
-      this._resumePageIdx = null;
-      this._pageMatches.length = 0;
-      this._pageMatchesColor.length = 0;
-      this._pageMatchesLength.length = 0;
-      this._watchlistResults.clear();
-      this._matchesCountTotal = 0;
+      this._rrDirtyReset(currentPageIndex);
     }
 
     this._updateAllPages(); // Wipe out any previously highlighted matches.
@@ -1042,6 +1087,107 @@ class PDFFindController {
         
         // Update text layer
         this._updateMatch(/* found = */ true);
+
+        return;
+      }
+
+      // We went beyond the current page's matches, so we advance to
+      // the next page.
+      this._advanceOffsetPage(previous);
+    }
+
+    // Start searching through the page.
+    this._nextPageMatch();
+  }
+
+  _rrNextContextMatch() {
+    const previous = this._state.findPrevious;
+    const currentPageIndex = this._linkService.page - 1;
+    const numPages = this._linkService.pagesCount;
+
+    // If we should re-calculate matches...
+    if (this._dirtyMatch) {
+      // Clear existing matches
+      this._rrDirtyReset(currentPageIndex);
+    }
+
+    // Get query
+    const query = this._state.query;
+
+    // If no valid query provided...
+    if (!query) {
+      // Do nothing: the matches should be wiped out already.
+      return;
+    }
+
+    // Get range for which to extract contexts
+    const range = query.range;
+    // Get entry, indices per page from query
+    const watchlistEntry = query.watchlistEntry;
+    
+    const entry = watchlistEntry.entry;
+    // Entry length for finding context after match
+    const entryLen = entry.length;
+    // Get map of pages to indices
+    // Map<page: number, indices: number[]>
+    const pageIndices = watchlistEntry.results;
+
+    for (let i = 0; i < numPages; i++) {
+      // If we are currently find matches for this page...
+      if (this._pendingFindMatches[i] === true) {
+        // Allow ongoing calculation to continue
+        continue;
+      }
+
+      // Indicate we are currently finding matches for this page
+      this._pendingFindMatches[i] = true;
+      
+      // Extract text for current page
+      this._extractTextPromises[i].then(pageIdx => {
+        
+        delete this._pendingFindMatches[pageIdx];
+        
+        // Find matches on current page
+        this._rrCalculateContexts(pageIdx, range, pageIndices, entryLen);
+
+        // If all pages searched...
+        if (pageIdx === this._linkService.pagesCount - 1) {
+          // Provide results
+          this._updateContextResults(entry);
+        }
+      });
+    }
+
+    // If there's no query there's no point in searching.
+    if (!this._state.query) {
+      this._updateUIState(FindState.FOUND);
+      return;
+    }
+
+    // If we're waiting on a page, we return since we can't do anything else.
+    if (this._resumePageIdx) {
+      return;
+    }
+
+    // Get offset page
+    const offset = this._offset;
+
+    // Keep track of how many pages we should maximally iterate through. 
+    this._pagesToSearch = numPages;
+
+    // If there's already a `matchIdx` that means we are iterating through a
+    // page's matches.
+    if (offset.matchIdx !== null) {
+
+      const numPageMatches = this._pageMatches[offset.pageIdx].length;
+
+      if (
+        (!previous && offset.matchIdx + 1 < numPageMatches) ||
+        (previous && offset.matchIdx > 0)
+      ) {
+        // The simple case; we just have advance the matchIdx to select
+        // the next match on the page.
+        offset.matchIdx = previous ? offset.matchIdx - 1 : offset.matchIdx + 1;
 
         return;
       }
@@ -1205,6 +1351,14 @@ class PDFFindController {
       source: this,
       numPages: this._linkService.pagesCount,
       results: this._watchlistResults // #RR
+    });
+  }
+
+  _updateContextResults(entry) {
+    this._eventBus.dispatch("updatecontextresults", {
+      source: this,
+      word: entry,
+      results: this._contextResults // #RR
     });
   }
 
