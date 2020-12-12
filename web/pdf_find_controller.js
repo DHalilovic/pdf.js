@@ -831,11 +831,9 @@ class PDFFindController {
     }
   }
 
-  _rrCalculateContexts(pageIndex, range, pageIndices, termLen) {
+  _rrCalculateContexts(pageIndex, range, indices, termLen) {
     // Get page text
     const pageContent = this._pageContents[pageIndex];
-    // Array of match indices
-    const indices = pageIndices.get(pageIndex);
 
     function getContextEntry(pageIndex, pageContent, range,
       startIndex, termLen) {
@@ -1131,29 +1129,43 @@ class PDFFindController {
     // Map<page: number, indices: number[]>
     const pageIndices = watchlistEntry.results;
 
-    for (let i = 0; i < numPages; i++) {
+    // Total pages to search
+    const totalPages = pageIndices.size;
+    // Counter for pages searched
+    let pagesSearched = 0;
+
+    // Only iterate across neccessary pages
+    for (const page of pageIndices.keys()) {
       // If we are currently find matches for this page...
-      if (this._pendingFindMatches[i] === true) {
+      if (this._pendingFindMatches[page] === true) {
         // Allow ongoing calculation to continue
         continue;
       }
 
       // Indicate we are currently finding matches for this page
-      this._pendingFindMatches[i] = true;
+      this._pendingFindMatches[page] = true;
       
       // Extract text for current page
-      this._extractTextPromises[i].then(pageIdx => {
+      this._extractTextPromises[page].then(pageIdx => {
         
         delete this._pendingFindMatches[pageIdx];
+        // Match indices on page: number[]
+        const indices = pageIndices.get(pageIdx);
         
-        // Find matches on current page
-        this._rrCalculateContexts(pageIdx, range, pageIndices, termLen);
+        // Skip pages without indices and out-of-range pages
+        if (indices && page > -1 && page < this._linkService.pagesCount) {
+          // Find matches on current page
+          this._rrCalculateContexts(pageIdx, range, indices, termLen);
+        }
 
         // If all pages searched...
-        if (pageIdx === this._linkService.pagesCount - 1) {
+        if (pagesSearched === totalPages - 1) {
           // Provide results
           this._updateContextResults(term);
         }
+
+        // Searched page
+        pagesSearched++;
       });
     }
 
